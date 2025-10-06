@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.api.websocket import router as websocket_router
 
 app = FastAPI(
     title="Nearcade Bridge Bot API",
@@ -15,6 +16,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 注册路由
+app.include_router(prefix="/ws", router=websocket_router, tags=["websocket"])
+
 
 @app.get("/")
 async def root():
@@ -23,6 +27,7 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
 
 if __name__ == "__main__":
     import uvicorn
