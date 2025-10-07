@@ -226,15 +226,10 @@ async def websocket_endpoint(websocket: WebSocket, bot_id=Depends(verify_bot_con
     await bot_connections_manager.add_bot(bot_id, websocket)
     try:
         while True:
-            try:
-                # 使用 asyncio.wait_for 添加超时，避免无限阻塞
-                data = await asyncio.wait_for(bot_connections_manager.listen_bot(), timeout=1.0)
-                if data:
-                    logger.debug(f"Received message: {data}")
-                    print(f"Received message: {data}")
-            except asyncio.TimeoutError:
-                # 超时后继续循环，这样可以定期检查信号
-                continue
+            data = await bot_connections_manager.listen_bot()
+            if data:
+                logger.debug(f"Received message: {data}")
+                print(f"Received message: {data}")
     except WebSocketDisconnect:
         logger.info(f"Bot {bot_id} disconnected.")
         await bot_connections_manager.remove_bot()
