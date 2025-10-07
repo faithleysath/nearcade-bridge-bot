@@ -7,6 +7,30 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# 从环境变量获取配置
+expected_path = os.getenv("WS_PATH")
+expected_token = os.getenv("WS_TOKEN")
+expected_bot_id_str = os.getenv("BOT_ID")
+group_id = os.getenv("GROUP_ID")
+target_id = os.getenv("TARGET_ID")
+
+# 验证环境变量已配置
+if not all([expected_path, expected_token, expected_bot_id_str, group_id, target_id]):
+    logger.error("Missing required environment variables: WS_PATH, WS_TOKEN, BOT_ID, GROUP_ID, TARGET_ID")
+    # raise WebSocketException(code=1008, reason="Server configuration error")
+    expected_path = '1'
+    expected_token = '123'
+    expected_bot_id_str = '3892215616'
+    group_id = '-1001945748276'
+    target_id = '3892215616'
+try:
+    expected_bot_id = int(expected_bot_id_str)  # type: ignore
+    group_id = int(group_id)  # type: ignore
+    target_id = int(target_id)  # type: ignore
+except ValueError:
+    logger.error("Invalid BOT_ID in environment variables")
+    raise WebSocketException(code=1008, reason="Server configuration error")
+
 router = APIRouter()
 
 # WebSocket连接管理（单bot模式）
@@ -161,25 +185,6 @@ async def verify_bot_connection(
     if not _validate_token_format(token):
         raise WebSocketException(code=1008, reason="Invalid token format")
 
-    # 从环境变量获取配置
-    expected_path = os.getenv("WS_PATH")
-    expected_token = os.getenv("WS_TOKEN")
-    expected_bot_id_str = os.getenv("BOT_ID")
-
-    # 验证环境变量已配置
-    if not all([expected_path, expected_token, expected_bot_id_str]):
-        logger.error("Missing required environment variables: WS_PATH, WS_TOKEN, BOT_ID")
-        # raise WebSocketException(code=1008, reason="Server configuration error")
-        expected_path = '1'
-        expected_token = '123'
-        expected_bot_id_str = '3892215616'
-
-    try:
-        expected_bot_id = int(expected_bot_id_str)  # type: ignore
-    except ValueError:
-        logger.error("Invalid BOT_ID in environment variables")
-        raise WebSocketException(code=1008, reason="Server configuration error")
-
     # 验证路径和token
     if path != expected_path or token != expected_token:
         logger.warning(f"Connection attempt with invalid path/token: path={path}, bot_id expected={expected_bot_id}")
@@ -221,10 +226,15 @@ async def websocket_endpoint(websocket: WebSocket, bot_id=Depends(verify_bot_con
     await bot_connections_manager.add_bot(bot_id, websocket)
     try:
         while True:
-            data = await bot_connections_manager.listen_bot()
-            if data:
-                logger.debug(f"Received message: {data}")
-                print(f"Received message: {data}")
+            try:
+                # 使用 asyncio.wait_for 添加超时，避免无限阻塞
+                data = await asyncio.wait_for(bot_connections_manager.listen_bot(), timeout=1.0)
+                if data:
+                    logger.debug(f"Received message: {data}")
+                    print(f"Received message: {data}")
+            except asyncio.TimeoutError:
+                # 超时后继续循环，这样可以定期检查信号
+                continue
     except WebSocketDisconnect:
         logger.info(f"Bot {bot_id} disconnected.")
         await bot_connections_manager.remove_bot()
